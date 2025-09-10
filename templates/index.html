@@ -2114,133 +2114,21 @@ function recalculateStationTotals(stationCode) {
     }
 }
 
-// Modified function to use edited data for payroll time table export
 function exportPayrollTimeTableWithEdits() {
+    console.log('Function started');
+    
     if (!editedPayrollData || Object.keys(editedPayrollData).length === 0) {
-        showStatus('No payroll data available. Please generate summaries first.', 'error');
-        return;
-    }
-
-    // Column headers matching the uploaded format
-    let csvContent = "Name,Hourly Rate,Hours,OT Hours,Overtime Rate,Salary,Bonus,Gross Pay\n";
-    
-    let allDrivers = [];
-    
-    // Collect all drivers from all stations using edited data
-    Object.keys(editedPayrollData).forEach(stationCode => {
-        const stationData = editedPayrollData[stationCode];
-        
-        stationData.weeklyData.forEach(driver => {
-   			const driverConfig = driverData.get(driver.driver);
-    		let calculatedPay = driver.calculatedPay;
-    
-    		// If calculatedPay is missing or 0, recalculate it
-    		if (!calculatedPay || calculatedPay === 0) {
-        		if (driverConfig) {
-            		const payResult = calculateDriverPay(driver.dates, driverConfig, stationData.dates);
-            		calculatedPay = payResult.totalPay;
-            		// Update the stored value
-            		driver.calculatedPay = calculatedPay;
-        		}
-    		}
-            
-            // Calculate total hours from edited data
-            let totalHours = 0;
-            stationData.dates.forEach(date => {
-                const dayData = driver.dates[date];
-                totalHours += dayData.hours || 0;
-            });
-            
-            // Calculate regular and OT hours
-            const regularHours = Math.min(totalHours, 40);
-            const otHours = Math.max(0, totalHours - 40);
-            
-            // Determine if driver is salaried
-            const isSalaried = driverConfig && driverConfig.paymentMethod === 'salary';
-            
-            let salary = 0;
-            let bonus = 0;
-            
-            if (isSalaried) {
-                salary = 500; // Fixed $500 for salaried employees
-                bonus = Math.max(0, calculatedPay - 500); // Remainder as bonus
-            } else {
-                salary = 0;
-                // For non-salaried: Bonus = Gross Pay - ((Hourly Rate × Hours) + (OT Hours × OT Rate))
-                const regularPay = regularHours * 15; // $15 hourly rate
-                const otPay = otHours * 22.50; // $22.50 OT rate
-                bonus = Math.max(0, calculatedPay - (regularPay + otPay));
-            }
-            
-            allDrivers.push({
-                name: driver.driver,
-                hourlyRate: 15,
-                hours: regularHours,
-                otHours: otHours,
-                overtimeRate: 22.50,
-                salary: salary,
-                bonus: bonus,
-                grossPay: calculatedPay
-            });
-        });
-    });
-    
-    // Sort drivers alphabetically by name
-    allDrivers.sort((a, b) => a.name.localeCompare(b.name));
-    
-    // Add driver data to CSV
-    allDrivers.forEach(driver => {
-        csvContent += `"${driver.name}",${driver.hourlyRate},${driver.hours.toFixed(2)},${driver.otHours.toFixed(2)},${driver.overtimeRate},${driver.salary.toFixed(2)},${driver.bonus.toFixed(2)},${driver.grossPay.toFixed(2)}\n`;
-    });
-    
-    // Add totals row
-    const totalRegularHours = allDrivers.reduce((sum, d) => sum + d.hours, 0);
-    const totalOTHours = allDrivers.reduce((sum, d) => sum + d.otHours, 0);
-    const totalSalary = allDrivers.reduce((sum, d) => sum + d.salary, 0);
-    const totalBonus = allDrivers.reduce((sum, d) => sum + d.bonus, 0);
-    const totalGrossPay = allDrivers.reduce((sum, d) => sum + d.grossPay, 0);
-    
-    csvContent += `"TOTALS",,${totalRegularHours.toFixed(2)},${totalOTHours.toFixed(2)},,${totalSalary.toFixed(2)},${totalBonus.toFixed(2)},${totalGrossPay.toFixed(2)}\n`;
-    
-    // Download the file
-    downloadExcelFile(csvContent, 'Payroll_Time_Table');
-    
-    showStatus(`Payroll Time Table exported successfully! ${allDrivers.length} drivers included.`, 'success');
-}
-
-// Modified download functions to use edited data
-function downloadStationWithEditedData(stationCode) {
-    if (!editedPayrollData[stationCode]) {
-        showStatus('No edited data available for this station', 'error');
+        alert('No edited data found');
         return;
     }
     
-    const stationData = editedPayrollData[stationCode];
+    alert('Found data for ' + Object.keys(editedPayrollData).length + ' stations');
     
-    // Ensure all drivers have calculated pay from edited data
-    const enhancedWeeklyData = stationData.weeklyData.map(driver => {
-        let calculatedPay = driver.calculatedPay;
-        
-        // If calculatedPay is missing or 0, recalculate it
-        if (!calculatedPay || calculatedPay === 0) {
-            const driverConfig = driverData.get(driver.driver);
-            if (driverConfig) {
-                const payResult = calculateDriverPay(driver.dates, driverConfig, stationData.dates);
-                calculatedPay = payResult.totalPay;
-                // Update the stored value
-                driver.calculatedPay = calculatedPay;
-            }
-        }
-        
-        return {
-            ...driver,
-            calculatedPay: calculatedPay || 0
-        };
-    });
-    
-    generateStationHTMLWithPay(stationCode, stationData.dates, enhancedWeeklyData, stationData);
+    // Simple test export
+    let csvContent = "Name,Test\nTest Driver,100\n";
+    downloadExcelFile(csvContent, 'Test_Export');
+    alert('Export attempted');
 }
-
 // Export station to Excel with edited data
 function exportStationToExcelWithEditedData(stationCode) {
     if (!editedPayrollData[stationCode]) {

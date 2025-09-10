@@ -1936,8 +1936,23 @@ let editedPayrollData = {};
 // Initialize edited data from original results
 function initializeEditedData() {
     editedPayrollData = JSON.parse(JSON.stringify(lastProcessedResults));
+    
+    // Ensure all drivers have calculated pay properly set
+    Object.keys(editedPayrollData).forEach(stationCode => {
+        const stationData = editedPayrollData[stationCode];
+        stationData.weeklyData.forEach(driver => {
+            // If calculatedPay is missing or 0, recalculate it
+            if (!driver.calculatedPay || driver.calculatedPay === 0) {
+                const driverConfig = driverData.get(driver.driver);
+                if (driverConfig) {
+                    const payResult = calculateDriverPay(driver.dates, driverConfig, stationData.dates);
+                    driver.calculatedPay = payResult.totalPay;
+                }
+            }
+        });
+    });
 }
-
+		
 // Make a cell editable (including pay cells)
 function makeEditable(cell, stationCode, driverName, date, field) {
     const currentValue = cell.textContent.replace('$', ''); // Remove $ for pay cells
@@ -2116,8 +2131,18 @@ function exportPayrollTimeTableWithEdits() {
         const stationData = editedPayrollData[stationCode];
         
         stationData.weeklyData.forEach(driver => {
-            const driverConfig = driverData.get(driver.driver);
-            let calculatedPay = driver.calculatedPay || 0; // Use stored calculated pay
+   			const driverConfig = driverData.get(driver.driver);
+    		let calculatedPay = driver.calculatedPay;
+    
+    		// If calculatedPay is missing or 0, recalculate it
+    		if (!calculatedPay || calculatedPay === 0) {
+        		if (driverConfig) {
+            		const payResult = calculateDriverPay(driver.dates, driverConfig, stationData.dates);
+            		calculatedPay = payResult.totalPay;
+            		// Update the stored value
+            		driver.calculatedPay = calculatedPay;
+        		}
+    		}
             
             // Calculate total hours from edited data
             let totalHours = 0;
@@ -2194,12 +2219,22 @@ function downloadStationWithEditedData(stationCode) {
     
     // Ensure all drivers have calculated pay from edited data
     const enhancedWeeklyData = stationData.weeklyData.map(driver => {
-        // Use the stored calculated pay (which includes manual edits)
-        const calculatedPay = driver.calculatedPay || 0;
+        let calculatedPay = driver.calculatedPay;
+        
+        // If calculatedPay is missing or 0, recalculate it
+        if (!calculatedPay || calculatedPay === 0) {
+            const driverConfig = driverData.get(driver.driver);
+            if (driverConfig) {
+                const payResult = calculateDriverPay(driver.dates, driverConfig, stationData.dates);
+                calculatedPay = payResult.totalPay;
+                // Update the stored value
+                driver.calculatedPay = calculatedPay;
+            }
+        }
         
         return {
             ...driver,
-            calculatedPay: calculatedPay
+            calculatedPay: calculatedPay || 0
         };
     });
     

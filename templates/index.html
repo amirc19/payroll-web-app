@@ -2114,21 +2114,7 @@ function recalculateStationTotals(stationCode) {
     }
 }
 
-function exportPayrollTimeTableWithEdits() {
-    console.log('Function started');
-    
-    if (!editedPayrollData || Object.keys(editedPayrollData).length === 0) {
-        alert('No edited data found');
-        return;
-    }
-    
-    alert('Found data for ' + Object.keys(editedPayrollData).length + ' stations');
-    
-    // Simple test export
-    let csvContent = "Name,Test\nTest Driver,100\n";
-    downloadExcelFile(csvContent, 'Test_Export');
-    alert('Export attempted');
-}
+
 // Export station to Excel with edited data
 function exportStationToExcelWithEditedData(stationCode) {
     if (!editedPayrollData[stationCode]) {

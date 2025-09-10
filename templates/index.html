@@ -100,11 +100,12 @@
 
 	    <div id="exportSection" style="display: none; text-align: center; margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 10px;">
     		<h4 style="margin-bottom: 15px; color: #495057;">Export Data for Accounting Software</h4>
-   		<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+    		<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
         		<button onclick="exportAllStationsToExcel()" class="process-btn" style="background: #28a745; font-size: 1rem; padding: 12px 20px;">Export All Stations (Excel)</button>
         		<button onclick="exportPayrollSummaryToExcel()" class="process-btn" style="background: #17a2b8; font-size: 1rem; padding: 12px 20px;">Export Payroll Summary (Excel)</button>
+        		<button onclick="exportPayrollTimeTable()" class="process-btn" style="background: #6f42c1; font-size: 1rem; padding: 12px 20px; color: white;">Make Payroll Time Table</button>
     		</div>
-	    </div>
+		</div>
 
             <div id="loading" class="loading">
                 <div class="spinner"></div>
@@ -1741,6 +1742,96 @@ function downloadExcelFile(csvContent, filename) {
     URL.revokeObjectURL(url);
     
     showStatus(`${filename} Excel file downloaded successfully!`, 'success');
+}
+
+
+
+function exportPayrollTimeTable() {
+    if (!lastProcessedResults) {
+        showStatus('No payroll data available. Please generate summaries first.', 'error');
+        return;
+    }
+
+    // Column headers matching the uploaded format
+    let csvContent = "Name,Hourly Rate,Hours,OT Hours,Overtime Rate,Salary,Bonus,Gross Pay\n";
+    
+    let allDrivers = [];
+    
+    // Collect all drivers from all stations
+    Object.keys(lastProcessedResults).forEach(stationCode => {
+        const stationData = lastProcessedResults[stationCode];
+        
+        stationData.weeklyData.forEach(driver => {
+            const driverConfig = driverData.get(driver.driver);
+            let calculatedPay = 0;
+            
+            if (driverConfig) {
+                const payResult = calculateDriverPay(driver.dates, driverConfig, stationData.dates);
+                calculatedPay = payResult.totalPay;
+            }
+            
+            // Calculate total hours
+            let totalHours = 0;
+            stationData.dates.forEach(date => {
+                const dayData = driver.dates[date];
+                totalHours += dayData.hours || 0;
+            });
+            
+            // Calculate regular and OT hours
+            const regularHours = Math.min(totalHours, 40);
+            const otHours = Math.max(0, totalHours - 40);
+            
+            // Determine if driver is salaried
+            const isSalaried = driverConfig && driverConfig.paymentMethod === 'salary';
+            
+            let salary = 0;
+            let bonus = 0;
+            
+            if (isSalaried) {
+                salary = 500; // Fixed $500 for salaried employees
+                bonus = Math.max(0, calculatedPay - 500); // Remainder as bonus
+            } else {
+                salary = 0;
+                // For non-salaried: Bonus = Gross Pay - ((Hourly Rate × Hours) + (OT Hours × OT Rate))
+                const regularPay = regularHours * 15; // $15 hourly rate
+                const otPay = otHours * 22.50; // $22.50 OT rate
+                bonus = Math.max(0, calculatedPay - (regularPay + otPay));
+            }
+            
+            allDrivers.push({
+                name: driver.driver,
+                hourlyRate: 15,
+                hours: regularHours,
+                otHours: otHours,
+                overtimeRate: 22.50,
+                salary: salary,
+                bonus: bonus,
+                grossPay: calculatedPay
+            });
+        });
+    });
+    
+    // Sort drivers alphabetically by name
+    allDrivers.sort((a, b) => a.name.localeCompare(b.name));
+    
+    // Add driver data to CSV
+    allDrivers.forEach(driver => {
+        csvContent += `"${driver.name}",${driver.hourlyRate},${driver.hours.toFixed(2)},${driver.otHours.toFixed(2)},${driver.overtimeRate},${driver.salary.toFixed(2)},${driver.bonus.toFixed(2)},${driver.grossPay.toFixed(2)}\n`;
+    });
+    
+    // Add totals row
+    const totalRegularHours = allDrivers.reduce((sum, d) => sum + d.hours, 0);
+    const totalOTHours = allDrivers.reduce((sum, d) => sum + d.otHours, 0);
+    const totalSalary = allDrivers.reduce((sum, d) => sum + d.salary, 0);
+    const totalBonus = allDrivers.reduce((sum, d) => sum + d.bonus, 0);
+    const totalGrossPay = allDrivers.reduce((sum, d) => sum + d.grossPay, 0);
+    
+    csvContent += `"TOTALS",,${totalRegularHours.toFixed(2)},${totalOTHours.toFixed(2)},,${totalSalary.toFixed(2)},${totalBonus.toFixed(2)},${totalGrossPay.toFixed(2)}\n`;
+    
+    // Download the file
+    downloadExcelFile(csvContent, 'Payroll_Time_Table');
+    
+    showStatus(`Payroll Time Table exported successfully! ${allDrivers.length} drivers included.`, 'success');
 }
     </script>
 </body>

@@ -98,12 +98,15 @@
                 <button onclick="calculatePay()" id="calculatePayBtn" class="process-btn" style="background: #17a2b8; display: none; margin-left: 10px;">Calculate Pay</button>
             </div>
 
-	    <div id="exportSection" style="display: none; text-align: center; margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+	   <div id="exportSection" style="display: none; text-align: center; margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 10px;">
     		<h4 style="margin-bottom: 15px; color: #495057;">Export Data for Accounting Software</h4>
+    		<div style="background: #e1f5fe; border: 1px solid #81d4fa; padding: 10px; margin-bottom: 15px; border-radius: 5px;">
+        		<small><strong>Note:</strong> All exports will include any edits you've made to the data in the tables above.</small>
+    		</div>
     		<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
-        		<button onclick="exportAllStationsToExcel()" class="process-btn" style="background: #28a745; font-size: 1rem; padding: 12px 20px;">Export All Stations (Excel)</button>
+        		<button onclick="exportAllStationsToExcelWithEdits()" class="process-btn" style="background: #28a745; font-size: 1rem; padding: 12px 20px;">Export All Stations (Excel)</button>
         		<button onclick="exportPayrollSummaryToExcel()" class="process-btn" style="background: #17a2b8; font-size: 1rem; padding: 12px 20px;">Export Payroll Summary (Excel)</button>
-        		<button onclick="exportPayrollTimeTable()" class="process-btn" style="background: #6f42c1; font-size: 1rem; padding: 12px 20px; color: white;">Make Payroll Time Table</button>
+        		<button onclick="exportPayrollTimeTableWithEdits()" class="process-btn" style="background: #6f42c1; font-size: 1rem; padding: 12px 20px; color: white;">Make Payroll Time Table</button>
     		</div>
 		</div>
 
@@ -1335,6 +1338,9 @@ function calculateAttendanceBonus(driverData, driverConfig, dates) {
 
 // Enhanced display function that includes pay calculations
 function displayAllStationsWithPayCalculation(stationResults) {
+    // Initialize edited data
+    initializeEditedData();
+    
     const stationResultsDiv = document.getElementById('stationResults');
     stationResultsDiv.innerHTML = '';
     
@@ -1361,6 +1367,7 @@ function displayAllStationsWithPayCalculation(stationResults) {
         
         const stationSection = document.createElement('div');
         stationSection.className = 'station-section';
+        stationSection.setAttribute('data-station', stationCode);
         
         const stationHeader = document.createElement('div');
         stationHeader.className = 'station-header';
@@ -1372,26 +1379,32 @@ function displayAllStationsWithPayCalculation(stationResults) {
         const stationContent = document.createElement('div');
         stationContent.className = 'station-content';
         
+        // Add editing instructions
+        const editInstructions = document.createElement('div');
+        editInstructions.style.cssText = 'background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin-bottom: 15px; border-radius: 5px; text-align: center;';
+        editInstructions.innerHTML = `
+            <strong>💡 Tip:</strong> Click on any Stops or Hours cell to edit the data. 
+            Totals and pay will automatically recalculate when you make changes.
+        `;
+        stationContent.appendChild(editInstructions);
+        
         const tableWrapper = document.createElement('div');
         tableWrapper.className = 'table-wrapper';
         
         const table = document.createElement('table');
-        table.innerHTML = createTableWithPayHTML(stationData.dates, enhancedWeeklyData);
+        table.innerHTML = createEditableTableWithPayHTML(stationData.dates, enhancedWeeklyData, stationCode);
         
         tableWrapper.appendChild(table);
         stationContent.appendChild(tableWrapper);
         
         const downloadSection = document.createElement('div');
         downloadSection.className = 'download-section';
-        
-        const stationDataString = JSON.stringify({...stationData, weeklyData: enhancedWeeklyData}).replace(/"/g, '&quot;');
-        
         downloadSection.innerHTML = `
-            <button onclick="downloadStationWithPay('${stationCode}', '${stationDataString}')" style="background: #17a2b8; color: white; border: none; padding: 15px 30px; margin: 5px; border-radius: 5px; cursor: pointer; font-size: 1.1rem;">
-                Download ${stationCode} HTML Report
+            <button onclick="downloadStationWithEditedData('${stationCode}')" style="background: #17a2b8; color: white; border: none; padding: 15px 30px; margin: 5px; border-radius: 5px; cursor: pointer; font-size: 1.1rem;">
+                Download ${stationCode} HTML Report (with edits)
             </button>
-            <button onclick="exportStationToExcel('${stationCode}', '${stationDataString}')" style="background: #28a745; color: white; border: none; padding: 15px 30px; margin: 5px; border-radius: 5px; cursor: pointer; font-size: 1.1rem;">
-                Export ${stationCode} to Excel
+            <button onclick="exportStationToExcelWithEditedData('${stationCode}')" style="background: #28a745; color: white; border: none; padding: 15px 30px; margin: 5px; border-radius: 5px; cursor: pointer; font-size: 1.1rem;">
+                Export ${stationCode} to Excel (with edits)
             </button>
         `;
         
@@ -1403,6 +1416,87 @@ function displayAllStationsWithPayCalculation(stationResults) {
     });
     
     document.getElementById('resultsSection').style.display = 'block';
+}
+
+// Enhanced table creation with editable cells
+function createEditableTableWithPayHTML(dates, weeklyData, stationCode) {
+    let headerHTML = `
+        <thead>
+            <tr>
+                <th rowspan="2" class="employee-name">Employee Name</th>`;
+    
+    dates.forEach(date => {
+        headerHTML += `<th colspan="2" class="date-header">${date}</th>`;
+    });
+    
+    headerHTML += `
+                <th rowspan="2" class="total-column">Days</th>
+                <th rowspan="2" class="total-column">Total Stops</th>
+                <th rowspan="2" class="total-column">Total Hours</th>
+                <th rowspan="2" class="pay-column">Weekly Pay ($)</th>
+            </tr>
+            <tr>`;
+    
+    dates.forEach(() => {
+        headerHTML += `<th>Stops</th><th>Hours</th>`;
+    });
+    
+    headerHTML += `</tr></thead><tbody>`;
+    
+    let totalPayroll = 0;
+    
+    weeklyData.forEach(driver => {
+        let totalStops = 0;
+        let totalHours = 0;
+        let daysWorked = 0;
+        
+        let rowHTML = `<tr><td class="employee-name">${driver.driver}</td>`;
+        
+        dates.forEach(date => {
+            const dayData = driver.dates[date];
+            if (dayData.totalStops > 0 || dayData.hours > 0) {
+                // Make stops and hours cells editable
+                rowHTML += `<td onclick="makeEditable(this, '${stationCode}', '${driver.driver}', '${date}', 'stops')" style="cursor: pointer; background: #f8f9fa;" title="Click to edit">${dayData.totalStops}</td>`;
+                rowHTML += `<td onclick="makeEditable(this, '${stationCode}', '${driver.driver}', '${date}', 'hours')" style="cursor: pointer; background: #f8f9fa;" title="Click to edit">${dayData.hours}</td>`;
+                totalStops += dayData.totalStops;
+                totalHours += dayData.hours;
+                daysWorked++;
+            } else {
+                rowHTML += `<td onclick="makeEditable(this, '${stationCode}', '${driver.driver}', '${date}', 'stops')" style="cursor: pointer; background: #f8f9fa;" title="Click to edit">0</td>`;
+                rowHTML += `<td onclick="makeEditable(this, '${stationCode}', '${driver.driver}', '${date}', 'hours')" style="cursor: pointer; background: #f8f9fa;" title="Click to edit">0</td>`;
+            }
+        });
+        
+        const weeklyPay = driver.calculatedPay || 0;
+        totalPayroll += weeklyPay;
+        
+        rowHTML += `<td class="total-column">${daysWorked}</td>`;
+        rowHTML += `<td class="total-column">${totalStops}</td>`;
+        rowHTML += `<td class="total-column">${totalHours}</td>`;
+        rowHTML += `<td class="pay-column">$${weeklyPay.toFixed(2)}</td></tr>`;
+        
+        headerHTML += rowHTML;
+    });
+    
+    // Add total row
+    headerHTML += `
+        <tr style="background: #f8f9fa; font-weight: bold; border-top: 3px solid #333;">
+            <td class="employee-name">TOTAL PAYROLL</td>`;
+    
+    // Empty cells for daily data
+    dates.forEach(() => {
+        headerHTML += '<td></td><td></td>';
+    });
+    
+    headerHTML += `
+            <td class="total-column"></td>
+            <td class="total-column"></td>
+            <td class="total-column"></td>
+            <td class="total-payroll">$${totalPayroll.toFixed(2)}</td>
+        </tr>`;
+    
+    headerHTML += '</tbody>';
+    return headerHTML;
 }
 
 // Enhanced table creation with pay column
@@ -1833,6 +1927,362 @@ function exportPayrollTimeTable() {
     
     showStatus(`Payroll Time Table exported successfully! ${allDrivers.length} drivers included.`, 'success');
 }
+
+// Store edited data globally
+let editedPayrollData = {};
+
+// Initialize edited data from original results
+function initializeEditedData() {
+    editedPayrollData = JSON.parse(JSON.stringify(lastProcessedResults));
+}
+
+// Make a cell editable
+function makeEditable(cell, stationCode, driverName, date, field) {
+    const currentValue = cell.textContent;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.step = field === 'hours' ? '0.5' : '1';
+    input.min = '0';
+    input.value = currentValue;
+    input.style.width = '60px';
+    input.style.textAlign = 'center';
+    input.style.border = '2px solid #007bff';
+    input.style.backgroundColor = '#fff3cd';
+    
+    // Save on Enter or blur
+    function saveEdit() {
+        const newValue = parseFloat(input.value) || 0;
+        cell.textContent = newValue;
+        cell.style.backgroundColor = newValue !== parseFloat(currentValue) ? '#d1ecf1' : '';
+        
+        // Update the edited data
+        if (!editedPayrollData[stationCode]) return;
+        
+        const driverData = editedPayrollData[stationCode].weeklyData.find(d => d.driver === driverName);
+        if (driverData && driverData.dates[date]) {
+            if (field === 'stops') {
+                driverData.dates[date].totalStops = newValue;
+            } else if (field === 'hours') {
+                driverData.dates[date].hours = newValue;
+            }
+        }
+        
+        // Recalculate totals and pay for this row
+        recalculateRowTotals(stationCode, driverName);
+        
+        // Make cell editable again on click
+        cell.onclick = () => makeEditable(cell, stationCode, driverName, date, field);
+    }
+    
+    input.onblur = saveEdit;
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+            input.blur();
+        } else if (e.key === 'Escape') {
+            cell.textContent = currentValue;
+            cell.onclick = () => makeEditable(cell, stationCode, driverName, date, field);
+        }
+    };
+    
+    cell.textContent = '';
+    cell.appendChild(input);
+    input.focus();
+    input.select();
+    
+    // Remove click handler temporarily
+    cell.onclick = null;
+}
+
+// Recalculate totals and pay for a specific driver row
+function recalculateRowTotals(stationCode, driverName) {
+    if (!editedPayrollData[stationCode]) return;
+    
+    const stationData = editedPayrollData[stationCode];
+    const driverData = stationData.weeklyData.find(d => d.driver === driverName);
+    if (!driverData) return;
+    
+    // Calculate new totals
+    let totalStops = 0;
+    let totalHours = 0;
+    let daysWorked = 0;
+    
+    stationData.dates.forEach(date => {
+        const dayData = driverData.dates[date];
+        if (dayData.totalStops > 0 || dayData.hours > 0) {
+            totalStops += dayData.totalStops;
+            totalHours += dayData.hours;
+            daysWorked++;
+        }
+    });
+    
+    // Recalculate pay
+    const driverConfig = driverData.get(driverName);
+    let newPay = 0;
+    if (driverConfig) {
+        const payResult = calculateDriverPay(driverData.dates, driverConfig, stationData.dates);
+        newPay = payResult.totalPay;
+    }
+    
+    // Update the table row
+    const table = document.querySelector(`[data-station="${stationCode}"] table`);
+    if (table) {
+        const rows = table.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            const nameCell = row.querySelector('.employee-name');
+            if (nameCell && nameCell.textContent === driverName) {
+                const cells = row.querySelectorAll('td');
+                
+                // Find total columns (Days, Total Stops, Total Hours, Weekly Pay)
+                const totalColumnsStart = cells.length - 4;
+                
+                cells[totalColumnsStart].textContent = daysWorked;     // Days
+                cells[totalColumnsStart + 1].textContent = totalStops; // Total Stops
+                cells[totalColumnsStart + 2].textContent = totalHours; // Total Hours
+                cells[totalColumnsStart + 3].textContent = `$${newPay.toFixed(2)}`; // Weekly Pay
+                
+                // Update background to show it was recalculated
+                cells[totalColumnsStart].style.backgroundColor = '#d4edda';
+                cells[totalColumnsStart + 1].style.backgroundColor = '#d4edda';
+                cells[totalColumnsStart + 2].style.backgroundColor = '#d4edda';
+                cells[totalColumnsStart + 3].style.backgroundColor = '#d4edda';
+                
+                // Store the new pay value
+                driverData.calculatedPay = newPay;
+            }
+        });
+        
+        // Recalculate station totals
+        recalculateStationTotals(stationCode);
+    }
+}
+
+// Recalculate total payroll for a station
+function recalculateStationTotals(stationCode) {
+    if (!editedPayrollData[stationCode]) return;
+    
+    let totalPayroll = 0;
+    editedPayrollData[stationCode].weeklyData.forEach(driver => {
+        totalPayroll += driver.calculatedPay || 0;
+    });
+    
+    // Update the total payroll row
+    const table = document.querySelector(`[data-station="${stationCode}"] table`);
+    if (table) {
+        const totalRow = table.querySelector('tbody tr:last-child');
+        if (totalRow) {
+            const totalPayCell = totalRow.querySelector('.total-payroll');
+            if (totalPayCell) {
+                totalPayCell.textContent = `$${totalPayroll.toFixed(2)}`;
+                totalPayCell.style.backgroundColor = '#ffc107';
+                totalPayCell.style.color = '#000';
+            }
+        }
+    }
+}
+
+// Modified function to use edited data for payroll time table export
+function exportPayrollTimeTableWithEdits() {
+    if (!editedPayrollData || Object.keys(editedPayrollData).length === 0) {
+        showStatus('No payroll data available. Please generate summaries first.', 'error');
+        return;
+    }
+
+    // Column headers matching the uploaded format
+    let csvContent = "Name,Hourly Rate,Hours,OT Hours,Overtime Rate,Salary,Bonus,Gross Pay\n";
+    
+    let allDrivers = [];
+    
+    // Collect all drivers from all stations using edited data
+    Object.keys(editedPayrollData).forEach(stationCode => {
+        const stationData = editedPayrollData[stationCode];
+        
+        stationData.weeklyData.forEach(driver => {
+            const driverConfig = driverData.get(driver.driver);
+            let calculatedPay = driver.calculatedPay || 0; // Use stored calculated pay
+            
+            // Recalculate pay if needed using edited data
+            if (driverConfig) {
+                const payResult = calculateDriverPay(driver.dates, driverConfig, stationData.dates);
+                calculatedPay = payResult.totalPay;
+            }
+            
+            // Calculate total hours from edited data
+            let totalHours = 0;
+            stationData.dates.forEach(date => {
+                const dayData = driver.dates[date];
+                totalHours += dayData.hours || 0;
+            });
+            
+            // Calculate regular and OT hours
+            const regularHours = Math.min(totalHours, 40);
+            const otHours = Math.max(0, totalHours - 40);
+            
+            // Determine if driver is salaried
+            const isSalaried = driverConfig && driverConfig.paymentMethod === 'salary';
+            
+            let salary = 0;
+            let bonus = 0;
+            
+            if (isSalaried) {
+                salary = 500; // Fixed $500 for salaried employees
+                bonus = Math.max(0, calculatedPay - 500); // Remainder as bonus
+            } else {
+                salary = 0;
+                // For non-salaried: Bonus = Gross Pay - ((Hourly Rate × Hours) + (OT Hours × OT Rate))
+                const regularPay = regularHours * 15; // $15 hourly rate
+                const otPay = otHours * 22.50; // $22.50 OT rate
+                bonus = Math.max(0, calculatedPay - (regularPay + otPay));
+            }
+            
+            allDrivers.push({
+                name: driver.driver,
+                hourlyRate: 15,
+                hours: regularHours,
+                otHours: otHours,
+                overtimeRate: 22.50,
+                salary: salary,
+                bonus: bonus,
+                grossPay: calculatedPay
+            });
+        });
+    });
+    
+    // Sort drivers alphabetically by name
+    allDrivers.sort((a, b) => a.name.localeCompare(b.name));
+    
+    // Add driver data to CSV
+    allDrivers.forEach(driver => {
+        csvContent += `"${driver.name}",${driver.hourlyRate},${driver.hours.toFixed(2)},${driver.otHours.toFixed(2)},${driver.overtimeRate},${driver.salary.toFixed(2)},${driver.bonus.toFixed(2)},${driver.grossPay.toFixed(2)}\n`;
+    });
+    
+    // Add totals row
+    const totalRegularHours = allDrivers.reduce((sum, d) => sum + d.hours, 0);
+    const totalOTHours = allDrivers.reduce((sum, d) => sum + d.otHours, 0);
+    const totalSalary = allDrivers.reduce((sum, d) => sum + d.salary, 0);
+    const totalBonus = allDrivers.reduce((sum, d) => sum + d.bonus, 0);
+    const totalGrossPay = allDrivers.reduce((sum, d) => sum + d.grossPay, 0);
+    
+    csvContent += `"TOTALS",,${totalRegularHours.toFixed(2)},${totalOTHours.toFixed(2)},,${totalSalary.toFixed(2)},${totalBonus.toFixed(2)},${totalGrossPay.toFixed(2)}\n`;
+    
+    // Download the file
+    downloadExcelFile(csvContent, 'Payroll_Time_Table');
+    
+    showStatus(`Payroll Time Table exported successfully! ${allDrivers.length} drivers included.`, 'success');
+}
+
+// Modified download functions to use edited data
+function downloadStationWithEditedData(stationCode) {
+    if (!editedPayrollData[stationCode]) {
+        showStatus('No edited data available for this station', 'error');
+        return;
+    }
+    
+    const stationData = editedPayrollData[stationCode];
+    generateStationHTMLWithPay(stationCode, stationData.dates, stationData.weeklyData, stationData);
+}
+
+function exportStationToExcelWithEditedData(stationCode) {
+    if (!editedPayrollData[stationCode]) {
+        showStatus('No edited data available for this station', 'error');
+        return;
+    }
+    
+    const stationData = editedPayrollData[stationCode];
+    
+    let csvContent = "Driver Name,";
+    
+    // Add date headers
+    stationData.dates.forEach(date => {
+        csvContent += `"${date} Stops","${date} Hours",`;
+    });
+    csvContent += "Days Worked,Total Stops,Total Hours,Weekly Pay,Payment Method\n";
+    
+    // Add driver data using edited values
+    stationData.weeklyData.forEach(driver => {
+        const driverConfig = driverData.get(driver.driver);
+        let calculatedPay = driver.calculatedPay || 0;
+        let paymentMethod = 'Not Configured';
+        
+        if (driverConfig) {
+            paymentMethod = formatPaymentMethod(driverConfig.paymentMethod);
+        }
+        
+        csvContent += `"${driver.driver}",`;
+        
+        // Add daily data using edited values
+        let totalStops = 0, totalHours = 0, daysWorked = 0;
+        stationData.dates.forEach(date => {
+            const dayData = driver.dates[date];
+            if (dayData.totalStops > 0 || dayData.hours > 0) {
+                csvContent += `${dayData.totalStops},${dayData.hours},`;
+                totalStops += dayData.totalStops;
+                totalHours += dayData.hours;
+                daysWorked++;
+            } else {
+                csvContent += "0,0,";
+            }
+        });
+        
+        csvContent += `${daysWorked},${totalStops},${totalHours},${calculatedPay.toFixed(2)},"${paymentMethod}"\n`;
+    });
+    
+    // Add total row
+    let totalPayroll = 0;
+    let totalDrivers = stationData.weeklyData.length;
+    stationData.weeklyData.forEach(driver => {
+        totalPayroll += driver.calculatedPay || 0;
+    });
+    
+    csvContent += `"TOTAL PAYROLL (${totalDrivers} drivers)",`;
+    // Add empty cells for daily data
+    stationData.dates.forEach(() => {
+        csvContent += ",,";
+    });
+    csvContent += `,,,${totalPayroll.toFixed(2)},\n`;
+    
+    downloadExcelFile(csvContent, `${stationCode.replace(/\//g, '_')}_Payroll_Detail_Edited`);
+}
+
+// Update the main export functions to use edited data
+function exportAllStationsToExcelWithEdits() {
+    if (!editedPayrollData || Object.keys(editedPayrollData).length === 0) {
+        showStatus('No payroll data available. Please generate summaries first.', 'error');
+        return;
+    }
+
+    let csvContent = "Station,Driver Name,Days Worked,Total Stops,Total Hours,Weekly Pay,Payment Method,Date Range\n";
+    
+    Object.keys(editedPayrollData).forEach(stationCode => {
+        const stationData = editedPayrollData[stationCode];
+        const dateRange = `${stationData.dates[0]} to ${stationData.dates[stationData.dates.length - 1]}`;
+        
+        stationData.weeklyData.forEach(driver => {
+            const driverConfig = driverData.get(driver.driver);
+            let calculatedPay = driver.calculatedPay || 0;
+            let paymentMethod = 'Not Configured';
+            
+            if (driverConfig) {
+                paymentMethod = formatPaymentMethod(driverConfig.paymentMethod);
+            }
+            
+            // Calculate totals from edited data
+            let totalStops = 0, totalHours = 0, daysWorked = 0;
+            stationData.dates.forEach(date => {
+                const dayData = driver.dates[date];
+                if (dayData.totalStops > 0 || dayData.hours > 0) {
+                    totalStops += dayData.totalStops;
+                    totalHours += dayData.hours;
+                    daysWorked++;
+                }
+            });
+            
+            csvContent += `"${stationCode}","${driver.driver}",${daysWorked},${totalStops},${totalHours},${calculatedPay.toFixed(2)},"${paymentMethod}","${dateRange}"\n`;
+        });
+    });
+    
+    downloadExcelFile(csvContent, 'Payroll_Summary_All_Stations_Edited');
+}
+            
     </script>
 </body>
 </html>

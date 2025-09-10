@@ -1383,8 +1383,8 @@ function displayAllStationsWithPayCalculation(stationResults) {
         const editInstructions = document.createElement('div');
         editInstructions.style.cssText = 'background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin-bottom: 15px; border-radius: 5px; text-align: center;';
         editInstructions.innerHTML = `
-            <strong>💡 Tip:</strong> Click on any Stops or Hours cell to edit the data. 
-            Totals and pay will automatically recalculate when you make changes.
+            <strong>💡 Tip:</strong> Click on any Stops, Hours, or Weekly Pay cell to edit the data. 
+            Totals will automatically recalculate when you make changes.
         `;
         stationContent.appendChild(editInstructions);
         
@@ -1418,7 +1418,8 @@ function displayAllStationsWithPayCalculation(stationResults) {
     document.getElementById('resultsSection').style.display = 'block';
 }
 
-// Enhanced table creation with editable cells
+
+// Enhanced table creation with editable pay cells
 function createEditableTableWithPayHTML(dates, weeklyData, stationCode) {
     let headerHTML = `
         <thead>
@@ -1473,7 +1474,8 @@ function createEditableTableWithPayHTML(dates, weeklyData, stationCode) {
         rowHTML += `<td class="total-column">${daysWorked}</td>`;
         rowHTML += `<td class="total-column">${totalStops}</td>`;
         rowHTML += `<td class="total-column">${totalHours}</td>`;
-        rowHTML += `<td class="pay-column">$${weeklyPay.toFixed(2)}</td></tr>`;
+        // Make pay cell editable too
+        rowHTML += `<td class="pay-column" onclick="makeEditable(this, '${stationCode}', '${driver.driver}', '', 'pay')" style="cursor: pointer;" title="Click to edit pay">$${weeklyPay.toFixed(2)}</td></tr>`;
         
         headerHTML += rowHTML;
     });
@@ -1936,15 +1938,15 @@ function initializeEditedData() {
     editedPayrollData = JSON.parse(JSON.stringify(lastProcessedResults));
 }
 
-// Make a cell editable
+// Make a cell editable (including pay cells)
 function makeEditable(cell, stationCode, driverName, date, field) {
-    const currentValue = cell.textContent;
+    const currentValue = cell.textContent.replace('$', ''); // Remove $ for pay cells
     const input = document.createElement('input');
     input.type = 'number';
-    input.step = field === 'hours' ? '0.5' : '1';
+    input.step = field === 'hours' ? '0.5' : (field === 'pay' ? '0.01' : '1');
     input.min = '0';
     input.value = currentValue;
-    input.style.width = '60px';
+    input.style.width = field === 'pay' ? '100px' : '60px';
     input.style.textAlign = 'center';
     input.style.border = '2px solid #007bff';
     input.style.backgroundColor = '#fff3cd';
@@ -1952,23 +1954,39 @@ function makeEditable(cell, stationCode, driverName, date, field) {
     // Save on Enter or blur
     function saveEdit() {
         const newValue = parseFloat(input.value) || 0;
-        cell.textContent = newValue;
+        
+        if (field === 'pay') {
+            cell.textContent = `$${newValue.toFixed(2)}`;
+        } else {
+            cell.textContent = newValue;
+        }
+        
         cell.style.backgroundColor = newValue !== parseFloat(currentValue) ? '#d1ecf1' : '';
         
         // Update the edited data
         if (!editedPayrollData[stationCode]) return;
         
-        const driverData = editedPayrollData[stationCode].weeklyData.find(d => d.driver === driverName);
-        if (driverData && driverData.dates[date]) {
-            if (field === 'stops') {
-                driverData.dates[date].totalStops = newValue;
-            } else if (field === 'hours') {
-                driverData.dates[date].hours = newValue;
+        const driverRowData = editedPayrollData[stationCode].weeklyData.find(d => d.driver === driverName);
+        if (driverRowData) {
+            if (field === 'pay') {
+                // Update calculated pay directly
+                driverRowData.calculatedPay = newValue;
+            } else if (driverRowData.dates[date]) {
+                if (field === 'stops') {
+                    driverRowData.dates[date].totalStops = newValue;
+                } else if (field === 'hours') {
+                    driverRowData.dates[date].hours = newValue;
+                }
             }
         }
         
-        // Recalculate totals and pay for this row
-        recalculateRowTotals(stationCode, driverName);
+        // Recalculate totals and pay for this row (except if manually editing pay)
+        if (field !== 'pay') {
+            recalculateRowTotals(stationCode, driverName);
+        } else {
+            // If manually editing pay, just update station totals
+            recalculateStationTotals(stationCode);
+        }
         
         // Make cell editable again on click
         cell.onclick = () => makeEditable(cell, stationCode, driverName, date, field);
@@ -1979,7 +1997,7 @@ function makeEditable(cell, stationCode, driverName, date, field) {
         if (e.key === 'Enter') {
             input.blur();
         } else if (e.key === 'Escape') {
-            cell.textContent = currentValue;
+            cell.textContent = field === 'pay' ? `$${parseFloat(currentValue).toFixed(2)}` : currentValue;
             cell.onclick = () => makeEditable(cell, stationCode, driverName, date, field);
         }
     };
@@ -1993,13 +2011,13 @@ function makeEditable(cell, stationCode, driverName, date, field) {
     cell.onclick = null;
 }
 
-// Recalculate totals and pay for a specific driver row
+// Fixed recalculate function
 function recalculateRowTotals(stationCode, driverName) {
     if (!editedPayrollData[stationCode]) return;
     
     const stationData = editedPayrollData[stationCode];
-    const driverData = stationData.weeklyData.find(d => d.driver === driverName);
-    if (!driverData) return;
+    const driverRowData = stationData.weeklyData.find(d => d.driver === driverName);
+    if (!driverRowData) return;
     
     // Calculate new totals
     let totalStops = 0;
@@ -2007,7 +2025,7 @@ function recalculateRowTotals(stationCode, driverName) {
     let daysWorked = 0;
     
     stationData.dates.forEach(date => {
-        const dayData = driverData.dates[date];
+        const dayData = driverRowData.dates[date];
         if (dayData.totalStops > 0 || dayData.hours > 0) {
             totalStops += dayData.totalStops;
             totalHours += dayData.hours;
@@ -2015,13 +2033,16 @@ function recalculateRowTotals(stationCode, driverName) {
         }
     });
     
-    // Recalculate pay
+    // Recalculate pay using global driver config
     const driverConfig = driverData.get(driverName);
     let newPay = 0;
     if (driverConfig) {
-        const payResult = calculateDriverPay(driverData.dates, driverConfig, stationData.dates);
+        const payResult = calculateDriverPay(driverRowData.dates, driverConfig, stationData.dates);
         newPay = payResult.totalPay;
     }
+    
+    // Store the new calculated pay
+    driverRowData.calculatedPay = newPay;
     
     // Update the table row
     const table = document.querySelector(`[data-station="${stationCode}"] table`);
@@ -2036,7 +2057,7 @@ function recalculateRowTotals(stationCode, driverName) {
                 const totalColumnsStart = cells.length - 4;
                 
                 cells[totalColumnsStart].textContent = daysWorked;     // Days
-                cells[totalColumnsStart + 1].textContent = totalStops; // Total Stops
+                cells[totalColumnsStart + 1].textContent = totalStops; // Total Stops  
                 cells[totalColumnsStart + 2].textContent = totalHours; // Total Hours
                 cells[totalColumnsStart + 3].textContent = `$${newPay.toFixed(2)}`; // Weekly Pay
                 
@@ -2045,9 +2066,6 @@ function recalculateRowTotals(stationCode, driverName) {
                 cells[totalColumnsStart + 1].style.backgroundColor = '#d4edda';
                 cells[totalColumnsStart + 2].style.backgroundColor = '#d4edda';
                 cells[totalColumnsStart + 3].style.backgroundColor = '#d4edda';
-                
-                // Store the new pay value
-                driverData.calculatedPay = newPay;
             }
         });
         
@@ -2057,6 +2075,7 @@ function recalculateRowTotals(stationCode, driverName) {
 }
 
 // Recalculate total payroll for a station
+// Fixed station totals calculation
 function recalculateStationTotals(stationCode) {
     if (!editedPayrollData[stationCode]) return;
     
@@ -2099,12 +2118,6 @@ function exportPayrollTimeTableWithEdits() {
         stationData.weeklyData.forEach(driver => {
             const driverConfig = driverData.get(driver.driver);
             let calculatedPay = driver.calculatedPay || 0; // Use stored calculated pay
-            
-            // Recalculate pay if needed using edited data
-            if (driverConfig) {
-                const payResult = calculateDriverPay(driver.dates, driverConfig, stationData.dates);
-                calculatedPay = payResult.totalPay;
-            }
             
             // Calculate total hours from edited data
             let totalHours = 0;
@@ -2178,9 +2191,22 @@ function downloadStationWithEditedData(stationCode) {
     }
     
     const stationData = editedPayrollData[stationCode];
-    generateStationHTMLWithPay(stationCode, stationData.dates, stationData.weeklyData, stationData);
+    
+    // Ensure all drivers have calculated pay from edited data
+    const enhancedWeeklyData = stationData.weeklyData.map(driver => {
+        // Use the stored calculated pay (which includes manual edits)
+        const calculatedPay = driver.calculatedPay || 0;
+        
+        return {
+            ...driver,
+            calculatedPay: calculatedPay
+        };
+    });
+    
+    generateStationHTMLWithPay(stationCode, stationData.dates, enhancedWeeklyData, stationData);
 }
 
+// Export station to Excel with edited data
 function exportStationToExcelWithEditedData(stationCode) {
     if (!editedPayrollData[stationCode]) {
         showStatus('No edited data available for this station', 'error');
@@ -2238,11 +2264,10 @@ function exportStationToExcelWithEditedData(stationCode) {
     stationData.dates.forEach(() => {
         csvContent += ",,";
     });
-    csvContent += `,,,${totalPayroll.toFixed(2)},\n`;
+    csvContent += `,,,$${totalPayroll.toFixed(2)},\n`;
     
     downloadExcelFile(csvContent, `${stationCode.replace(/\//g, '_')}_Payroll_Detail_Edited`);
 }
-
 // Update the main export functions to use edited data
 function exportAllStationsToExcelWithEdits() {
     if (!editedPayrollData || Object.keys(editedPayrollData).length === 0) {

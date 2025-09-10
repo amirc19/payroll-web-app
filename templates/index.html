@@ -1894,16 +1894,16 @@ function exportPayrollTimeTable() {
                 bonus = Math.max(0, calculatedPay - (regularPay + otPay));
             }
             
-            allDrivers.push({
-                name: driver.driver,
-                hourlyRate: 15,
-                hours: regularHours,
-                otHours: otHours,
-                overtimeRate: 22.50,
-                salary: salary,
-                bonus: bonus,
-                grossPay: calculatedPay
-            });
+           allDrivers.push({
+    		name: driver.driver,
+    		hourlyRate: 15,
+    		hours: regularHours,
+    		otHours: otHours,
+    		overtimeRate: 22.50,
+    		salary: salary,
+    		bonus: bonus,
+    		grossPay: calculatedPay || 0
+		});
         });
     });
     
@@ -1911,9 +1911,9 @@ function exportPayrollTimeTable() {
     allDrivers.sort((a, b) => a.name.localeCompare(b.name));
     
     // Add driver data to CSV
-    allDrivers.forEach(driver => {
-        csvContent += `"${driver.name}",${driver.hourlyRate},${driver.hours.toFixed(2)},${driver.otHours.toFixed(2)},${driver.overtimeRate},${driver.salary.toFixed(2)},${driver.bonus.toFixed(2)},${driver.grossPay.toFixed(2)}\n`;
-    });
+allDrivers.forEach(driver => {
+    csvContent += `"${driver.name}",${driver.hourlyRate},${(driver.hours || 0).toFixed(2)},${(driver.otHours || 0).toFixed(2)},${driver.overtimeRate},${(driver.salary || 0).toFixed(2)},${(driver.bonus || 0).toFixed(2)},${(driver.grossPay || 0).toFixed(2)}\n`;
+});
     
     // Add totals row
     const totalRegularHours = allDrivers.reduce((sum, d) => sum + d.hours, 0);

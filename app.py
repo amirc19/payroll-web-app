@@ -21,8 +21,8 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Initialize database on startup
 with app.app_context():
-    if init_database():
-       
+    init_database()
+    
 def load_driver_data_from_file():
     """Load driver data from database (keeping function name for compatibility)"""
     return load_all_drivers_from_db()

@@ -120,22 +120,7 @@ def parse_hours(value):
     return 0
 
 
-def migrate_json_to_db():
-    """One-time migration from JSON file to database"""
-    import json
-    if os.path.exists('driver_data.json'):
-        try:
-            with open('driver_data.json', 'r') as f:
-                json_data = json.load(f)
-            
-            for driver_name, config in json_data.items():
-                save_driver_to_db(driver_name, config)
-            
-            print(f"Migrated {len(json_data)} drivers to database")
-            # Optionally rename the file after migration
-            os.rename('driver_data.json', 'driver_data.json.backup')
-        except Exception as e:
-            print(f"Migration error: {e}")
+
 
 def process_excel_file(file_path, filename):
     """Process an Excel file and extract driver data"""
@@ -477,6 +462,22 @@ def manage_drivers():
         else:
             return jsonify({'error': 'Driver not found or failed to delete'}), 404
 
+def migrate_json_to_db():
+    """One-time migration from JSON file to database"""
+    import json
+    if os.path.exists('driver_data.json'):
+        try:
+            with open('driver_data.json', 'r') as f:
+                json_data = json.load(f)
+            
+            for driver_name, config in json_data.items():
+                save_driver_to_db(driver_name, config)
+            
+            print(f"Migrated {len(json_data)} drivers to database")
+            # Optionally rename the file after migration
+            os.rename('driver_data.json', 'driver_data.json.backup')
+        except Exception as e:
+            print(f"Migration error: {e}")
 
 
 if __name__ == '__main__':

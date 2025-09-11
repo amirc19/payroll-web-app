@@ -8,6 +8,9 @@ import xlrd
 from datetime import datetime
 import re
 
+# Import database functions
+from database import init_database, save_driver_to_db, load_all_drivers_from_db, delete_driver_from_db
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this')
 
@@ -17,29 +20,20 @@ ALLOWED_EXTENSIONS = {'xls', 'xlsx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
-# Driver data file path
-DRIVER_DATA_FILE = 'driver_data.json'
+# Initialize database on startup
+@app.before_first_request
+def create_tables():
+    init_database()
 
 def load_driver_data_from_file():
-    """Load driver data from JSON file"""
-    if os.path.exists(DRIVER_DATA_FILE):
-        try:
-            with open(DRIVER_DATA_FILE, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error loading driver data: {e}")
-            return {}
-    return {}
+    """Load driver data from database (keeping function name for compatibility)"""
+    return load_all_drivers_from_db()
 
 def save_driver_data_to_file(driver_data):
-    """Save driver data to JSON file"""
-    try:
-        with open(DRIVER_DATA_FILE, 'w') as f:
-            json.dump(driver_data, f, indent=2)
-        return True
-    except Exception as e:
-        print(f"Error saving driver data: {e}")
-        return False
+    """Save driver data to database (keeping function name for compatibility)"""
+    # This function is no longer used since we save individual drivers
+    # but keeping it for backward compatibility
+    return True
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -437,10 +431,9 @@ def upload_files():
 
 @app.route('/api/drivers', methods=['GET', 'POST', 'DELETE'])
 def manage_drivers():
-    # Load from file instead of session
-    driver_data = load_driver_data_from_file()
-    
     if request.method == 'GET':
+        # Load from database
+        driver_data = load_all_drivers_from_db()
         return jsonify(driver_data)
     
     elif request.method == 'POST':
@@ -451,22 +444,18 @@ def manage_drivers():
         if not driver_name or not driver_config:
             return jsonify({'error': 'Missing driver name or configuration'}), 400
         
-        driver_data[driver_name] = driver_config
-        if save_driver_data_to_file(driver_data):
+        # Save to database
+        if save_driver_to_db(driver_name, driver_config):
             return jsonify({'message': 'Driver saved successfully'})
         else:
             return jsonify({'error': 'Failed to save driver data'}), 500
     
     elif request.method == 'DELETE':
         driver_name = request.args.get('name')
-        if driver_name in driver_data:
-            del driver_data[driver_name]
-            if save_driver_data_to_file(driver_data):
-                return jsonify({'message': 'Driver deleted successfully'})
-            else:
-                return jsonify({'error': 'Failed to delete driver data'}), 500
-        
-        return jsonify({'error': 'Driver not found'}), 404
+        if delete_driver_from_db(driver_name):
+            return jsonify({'message': 'Driver deleted successfully'})
+        else:
+            return jsonify({'error': 'Driver not found or failed to delete'}), 404
 
 if __name__ == '__main__':
     app.run(debug=True)

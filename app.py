@@ -463,3 +463,21 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
+
+def migrate_json_to_db():
+    """One-time migration from JSON file to database"""
+    import json
+    if os.path.exists('driver_data.json'):
+        try:
+            with open('driver_data.json', 'r') as f:
+                json_data = json.load(f)
+            
+            for driver_name, config in json_data.items():
+                save_driver_to_db(driver_name, config)
+            
+            print(f"Migrated {len(json_data)} drivers to database")
+            # Optionally rename the file after migration
+            os.rename('driver_data.json', 'driver_data.json.backup')
+        except Exception as e:
+            print(f"Migration error: {e}")

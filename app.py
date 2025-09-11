@@ -22,8 +22,10 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Initialize database on startup
 with app.app_context():
-    init_database()
-    migrate_json_to_db()  # Add this line
+    if init_database():
+        migrate_json_to_db()
+    else:
+        print("Database initialization failed - skipping migration")
     
 def load_driver_data_from_file():
     """Load driver data from database (keeping function name for compatibility)"""

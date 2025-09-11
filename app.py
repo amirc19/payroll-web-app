@@ -9,7 +9,7 @@ from datetime import datetime
 import re
 
 # Import database functions
-from database import init_database, save_driver_to_db, load_all_drivers_from_db, delete_driver_from_db
+from database import init_database, save_driver_to_db, load_all_drivers_from_db, delete_driver_from_db, migrate_json_to_db
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this')
@@ -26,6 +26,22 @@ with app.app_context():
         migrate_json_to_db()
     else:
         print("Database initialization failed - skipping migration")
+
+def migrate_json_to_db():
+    """One-time migration from JSON file to database"""
+    import json
+    if os.path.exists('driver_data.json'):
+        try:
+            with open('driver_data.json', 'r') as f:
+                json_data = json.load(f)
+            
+            for driver_name, config in json_data.items():
+                save_driver_to_db(driver_name, config)
+            
+            print(f"Migrated {len(json_data)} drivers to database")
+            os.rename('driver_data.json', 'driver_data.json.backup')
+        except Exception as e:
+            print(f"Migration error: {e}")
     
 def load_driver_data_from_file():
     """Load driver data from database (keeping function name for compatibility)"""
@@ -461,24 +477,6 @@ def manage_drivers():
             return jsonify({'message': 'Driver deleted successfully'})
         else:
             return jsonify({'error': 'Driver not found or failed to delete'}), 404
-
-def migrate_json_to_db():
-    """One-time migration from JSON file to database"""
-    import json
-    if os.path.exists('driver_data.json'):
-        try:
-            with open('driver_data.json', 'r') as f:
-                json_data = json.load(f)
-            
-            for driver_name, config in json_data.items():
-                save_driver_to_db(driver_name, config)
-            
-            print(f"Migrated {len(json_data)} drivers to database")
-            # Optionally rename the file after migration
-            os.rename('driver_data.json', 'driver_data.json.backup')
-        except Exception as e:
-            print(f"Migration error: {e}")
-
 
 if __name__ == '__main__':
     app.run(debug=True)
